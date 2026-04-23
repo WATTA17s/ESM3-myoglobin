@@ -1,7 +1,3 @@
-# =========================
-# INSTALL
-# =========================
-!pip install -U esm
 
 # =========================
 # IMPORTS
@@ -13,15 +9,10 @@ from getpass import getpass
 import esm
 from esm.sdk.api import ESMProtein, GenerationConfig
 
-print("esm version:", esm.__version__)
+MODEL_NAME = "esm3-medium-2024-08" 
 
-# =========================
-# CONFIG
-# =========================
-MODEL_NAME = "esm3-medium-2024-08"
-TOKEN = getpass("Enter ESM API key: ")
+MASK_CHAR = "_" 
 
-MASK_CHAR = "_"
 WINDOW = 10
 STEP = 10
 
@@ -31,20 +22,21 @@ NUM_STEPS = 8
 
 FINALIST_THRESHOLD = 0.6
 
+def create_model(model_name=MODEL_NAME, token=None):
+    if token is None:
+        token = getpass("Enter ESM API key: ")
+
+    print("esm version:", esm.__version__)
+
+    return esm.sdk.client(model_name, token=token)
+    
 OUTPUT_DIR = Path("pipeline_v1_outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 MASTER_LOG = OUTPUT_DIR / "full_pipeline_log.txt"
 
-# =========================
-# MODEL
-# =========================
-model = esm.sdk.client(MODEL_NAME, token=TOKEN)
 
-# =========================
-# INPUT
-# =========================
-ref_seq = "PUT_YOUR_REFERENCE_SEQUENCE_HERE"
+
 
 # =========================
 # FILE HELPERS
@@ -86,7 +78,7 @@ def masked_positions(seq):
 # =========================
 # GENERATE (V1)
 # =========================
-def generate_predictions(masked_seq):
+def generate_predictions(model, masked_seq):
     preds = []
 
     for _ in range(N_SAMPLES):
@@ -170,7 +162,7 @@ def build_finalist_seq(final_merged, ref_seq, all_preds):
 # =========================
 # MAIN PIPELINE
 # =========================
-def run_pipeline():
+def run_pipeline(model, ref_seq):
     save_text(MASTER_LOG, "")
 
     append_log("===== PIPELINE V1 START =====\n\n")
@@ -186,7 +178,7 @@ def run_pipeline():
     for i, mseq in enumerate(masked_seqs):
         print(f"[Mask {i+1}/{len(masked_seqs)}]")
 
-        preds = generate_predictions(mseq)
+        preds = generate_predictions(model, mseq)
         line = consensus_line(mseq, preds, ref_seq)
 
         all_lines.append(line)
@@ -205,7 +197,7 @@ def run_pipeline():
     for name, seq in stages.items():
         print("Stage:", name)
 
-        preds = generate_predictions(seq)
+        preds = generate_predictions(model, seq)
         all_stage_preds.extend(preds)
 
     # STEP 5: final
@@ -215,6 +207,13 @@ def run_pipeline():
     print("\nFinal:", final)
 
     return final_merged, final
+    
+def run_api_pipeline(ref_seq, token=None):
+    model = create_model(token=token)
+    return run_pipeline(model, ref_seq)
 
+if __name__ == "__main__":
+    merged, final = run_api_pipeline(
+        "MVLSEGEWQLVLHVWAKVE..."
+    )
 
-merged, final = run_pipeline()
