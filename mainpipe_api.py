@@ -159,27 +159,54 @@ def build_finalist_seq(final_merged, ref_seq, all_preds):
 
     return "".join(result)
 
-# =========================
-# MAIN PIPELINE
-# =========================
 def run_pipeline(model, ref_seq):
     save_text(MASTER_LOG, "")
 
     append_log("===== PIPELINE V1 START =====\n\n")
+    append_log("REFERENCE SEQUENCE:\n")
     append_log(ref_seq + "\n\n")
 
     # STEP 1: mask
     masked_seqs = build_masked_sequences(ref_seq, WINDOW, STEP)
     save_lines(OUTPUT_DIR / "step1_masked.txt", masked_seqs)
 
+    append_log("="*70 + "\n")
+    append_log("STEP 1: MASKED SEQUENCES\n")
+    append_log("="*70 + "\n")
+
+    for i, mseq in enumerate(masked_seqs):
+        append_log(f"\nMASK {i+1:03d}\n")
+        append_log(mseq + "\n")
+
     all_lines = []
 
-    # STEP 2: per-mask
+    # STEP 2: per-mask predictions
+    append_log("\n" + "="*70 + "\n")
+    append_log("STEP 2: MASK PREDICTIONS + CONSENSUS\n")
+    append_log("="*70 + "\n")
+
     for i, mseq in enumerate(masked_seqs):
-        print(f"[Mask {i+1}/{len(masked_seqs)}]")
+        start = i * STEP
+        end = min(start + WINDOW, len(ref_seq))
+
+        print(f"[Mask {i+1}/{len(masked_seqs)}] positions {start+1}-{end}")
 
         preds = generate_predictions(model, mseq)
         line = consensus_line(mseq, preds, ref_seq)
+
+        append_log("\n" + "-"*70 + "\n")
+        append_log(f"MASK {i+1:03d} | positions {start+1}-{end}\n")
+        append_log("-"*70 + "\n")
+
+        append_log("INPUT MASKED SEQUENCE:\n")
+        append_log(mseq + "\n\n")
+
+        append_log("20 PREDICTIONS:\n")
+        for j, seq in enumerate(preds):
+            append_log(f"{j+1:02d}: {seq}\n")
+
+        append_log("\nCONSENSUS LINE:\n")
+        append_log(line + "\n")
 
         all_lines.append(line)
 
@@ -187,12 +214,20 @@ def run_pipeline(model, ref_seq):
     final_merged = merge_consensus_lines(all_lines, ref_seq)
     save_text(OUTPUT_DIR / "step3_merged.txt", final_merged)
 
+    append_log("\n" + "="*70 + "\n")
+    append_log("STEP 3: FINAL MERGED SEQUENCE\n")
+    append_log("="*70 + "\n")
+    append_log(final_merged + "\n")
+
     print("\nMerged:", final_merged)
 
-    # STEP 4: 3-stage
+    # STEP 4: 3-stage predictions
     stages = build_three_stage_inputs(final_merged, ref_seq)
-
     all_stage_preds = []
+
+    append_log("\n" + "="*70 + "\n")
+    append_log("STEP 4: STAGE PREDICTIONS\n")
+    append_log("="*70 + "\n")
 
     for name, seq in stages.items():
         print("Stage:", name)
@@ -200,9 +235,30 @@ def run_pipeline(model, ref_seq):
         preds = generate_predictions(model, seq)
         all_stage_preds.extend(preds)
 
+        append_log("\n" + "-"*70 + "\n")
+        append_log(f"STAGE: {name}\n")
+        append_log("-"*70 + "\n")
+
+        append_log("STAGE INPUT SEQUENCE:\n")
+        append_log(seq + "\n\n")
+
+        append_log("20 STAGE PREDICTIONS:\n")
+        for j, p in enumerate(preds):
+            append_log(f"{j+1:02d}: {p}\n")
+
     # STEP 5: final
     final = build_finalist_seq(final_merged, ref_seq, all_stage_preds)
     save_text(OUTPUT_DIR / "step5_final.txt", final)
+
+    append_log("\n" + "="*70 + "\n")
+    append_log("STEP 5: FINAL RESULT\n")
+    append_log("="*70 + "\n")
+
+    append_log("FINAL MERGED:\n")
+    append_log(final_merged + "\n\n")
+
+    append_log("FINAL SEQUENCE:\n")
+    append_log(final + "\n")
 
     print("\nFinal:", final)
 
